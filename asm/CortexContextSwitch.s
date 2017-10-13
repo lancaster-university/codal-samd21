@@ -34,8 +34,8 @@
     .global restore_register_context
 
 @ R0 Contains a pointer to the TCB of the fibre being scheduled out.
-@ R1 Contains a pointer to the TCB of the fibre being scheduled in.
-@ R2 Contains a pointer to the base of the stack of the fibre being scheduled out.
+@ R1 Contains a pointer to the base of the stack of the fibre being scheduled out.
+@ R2 Contains a pointer to the TCB of the fibre being scheduled in.
 @ R3 Contains a pointer to the base of the stack of the fibre being scheduled in.
 
 swap_context:
@@ -81,16 +81,16 @@ store_context_complete:
     @ of scheduling, but we need a lot of capacity for interrupt handling and other functions.
 
     @ Skip this is we're given a NULL parameter for the stack.
-    CMP     R2, #0
+    CMP     R1, #0
     BEQ     store_stack_complete
 
     LDR     R4, [R0,#60]         @ Load R4 with the fiber's defined stack_base.
 store_stack:
     SUBS    R4, #4
-    SUBS    R2, #4
+    SUBS    R1, #4
 
     LDR     R5, [R4]
-    STR     R5, [R2]
+    STR     R5, [R1]
 
     CMP     R4, R6
     BNE     store_stack
@@ -101,9 +101,9 @@ store_stack_complete:
     @ Now page in the new context.
     @ Update all registers except the PC. We can also safely ignore the STATUS register, as we're just a fiber scheduler.
     @
-    LDR     R4, [R1, #56]
+    LDR     R4, [R2, #56]
     MOV     LR, R4
-    LDR     R6, [R1, #52]
+    LDR     R6, [R2, #52]
     MOV     SP, R6
 
     @ Copy the stack in.
@@ -113,7 +113,7 @@ store_stack_complete:
     CMP     R3, #0
     BEQ     restore_stack_complete
 
-    LDR     R4, [R1,#60]         @ Load R4 with the fiber's defined stack_base.
+    LDR     R4, [R2,#60]         @ Load R4 with the fiber's defined stack_base.
 
 restore_stack:
     SUBS    R4, #4
@@ -126,25 +126,25 @@ restore_stack:
     BNE     restore_stack
 
 restore_stack_complete:
-    LDR     R4, [R1, #48]
+    LDR     R4, [R2, #48]
     MOV     R12, R4
-    LDR     R4, [R1, #44]
+    LDR     R4, [R2, #44]
     MOV     R11, R4
-    LDR     R4, [R1, #40]
+    LDR     R4, [R2, #40]
     MOV     R10, R4
-    LDR     R4, [R1, #36]
+    LDR     R4, [R2, #36]
     MOV     R9, R4
-    LDR     R4, [R1, #32]
+    LDR     R4, [R2, #32]
     MOV     R8, R4
 
-    LDR     R7, [R1, #28]
-    LDR     R6, [R1, #24]
-    LDR     R5, [R1, #20]
-    LDR     R4, [R1, #16]
-    LDR     R3, [R1, #12]
-    LDR     R2, [R1, #8]
-    LDR     R0, [R1, #0]
-    LDR     R1, [R1, #4]
+    LDR     R7, [R2, #28]
+    LDR     R6, [R2, #24]
+    LDR     R5, [R2, #20]
+    LDR     R4, [R2, #16]
+    LDR     R3, [R2, #12]
+    LDR     R1, [R2, #8]
+    LDR     R0, [R2, #0]
+    LDR     R2, [R2, #4]
 
     @ Return to caller (scheduler).
     BX      LR
