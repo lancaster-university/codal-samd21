@@ -142,9 +142,9 @@ restore_stack_complete:
     LDR     R5, [R2, #20]
     LDR     R4, [R2, #16]
     LDR     R3, [R2, #12]
-    LDR     R1, [R2, #8]
+    LDR     R1, [R2, #4]
     LDR     R0, [R2, #0]
-    LDR     R2, [R2, #4]
+    LDR     R2, [R2, #8]
 
     @ Return to caller (scheduler).
     BX      LR
