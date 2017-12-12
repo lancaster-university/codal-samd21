@@ -172,11 +172,30 @@ void usb_set_address(uint16_t wValue)
     USB->DEVICE.DADD.reg = USB_DEVICE_DADD_ADDEN | wValue;
 }
 
+int UsbEndpointIn::reset()
+{
+    DMESG("reset IN %d", ep);
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_STALLRQ1;
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK1RDY;
+    USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1;
+    wLength = 0;
+    return DEVICE_OK;
+}
+
 int UsbEndpointIn::stall()
 {
     DMESG("stall IN %d", ep);
     USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_STALLRQ1;
     wLength = 0;
+    return DEVICE_OK;
+}
+
+int UsbEndpointOut::reset()
+{
+    DMESG("reset OUT %d", ep);
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_STALLRQ0;
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_BK0RDY;
+    USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT0;
     return DEVICE_OK;
 }
 
