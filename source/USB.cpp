@@ -172,10 +172,25 @@ void usb_set_address(uint16_t wValue)
     USB->DEVICE.DADD.reg = USB_DEVICE_DADD_ADDEN | wValue;
 }
 
+int UsbEndpointIn::clearStall()
+{
+    DMESG("clear stall IN %d", ep);
+	if (USB->DEVICE.DeviceEndpoint[ep].EPSTATUS.reg & USB_DEVICE_EPSTATUSSET_STALLRQ1) {
+        // Remove stall request
+        USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_STALLRQ1;
+        if (USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg & USB_DEVICE_EPINTFLAG_STALL1) {
+            USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_STALL1;
+            // The Stall has occurred, then reset data toggle
+            USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_DTGLIN;
+        }
+    }
+    wLength = 0;
+    return DEVICE_OK;
+}
+
 int UsbEndpointIn::reset()
 {
     DMESG("reset IN %d", ep);
-    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_STALLRQ1;
     USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK1RDY;
     USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1;
     wLength = 0;
@@ -190,10 +205,24 @@ int UsbEndpointIn::stall()
     return DEVICE_OK;
 }
 
+int UsbEndpointOut::clearStall()
+{
+    DMESG("clear stall OUT %d", ep);
+	if (USB->DEVICE.DeviceEndpoint[ep].EPSTATUS.reg & USB_DEVICE_EPSTATUSSET_STALLRQ0) {
+        // Remove stall request
+        USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_STALLRQ0;
+        if (USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg & USB_DEVICE_EPINTFLAG_STALL0) {
+            USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_STALL0;
+            // The Stall has occurred, then reset data toggle
+            USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_DTGLOUT;
+        }
+    }
+    return DEVICE_OK;
+}
+
 int UsbEndpointOut::reset()
 {
     DMESG("reset OUT %d", ep);
-    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_STALLRQ0;
     USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_BK0RDY;
     USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT0;
     return DEVICE_OK;
