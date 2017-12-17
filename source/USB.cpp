@@ -279,12 +279,24 @@ UsbEndpointOut::UsbEndpointOut(uint8_t idx, uint8_t type, uint8_t size)
     // dep->EPINTENSET.reg = USB_DEVICE_EPINTENSET_TRCPT0 | USB_DEVICE_EPINTENSET_TRFAIL0 |
     //                      USB_DEVICE_EPINTENSET_STALL0 | USB_DEVICE_EPINTENSET_RXSTP;
     dep->EPINTENCLR.reg = USB_DEVICE_EPINTFLAG_MASK;
-    if (idx == 0)
-        dep->EPINTENSET.reg = USB_DEVICE_EPINTENSET_RXSTP;
-    else
-        dep->EPINTENSET.reg = USB_DEVICE_EPINTENSET_TRCPT0;
-
+    enableIRQ();
     startRead();
+}
+
+int UsbEndpointOut::disableIRQ()
+{
+    USB->DEVICE.DeviceEndpoint[ep].EPINTENCLR.reg = 
+        ep == 0 ? USB_DEVICE_EPINTENCLR_RXSTP 
+                : USB_DEVICE_EPINTENCLR_TRCPT0;
+    return DEVICE_OK;
+}
+
+int UsbEndpointOut::enableIRQ()
+{
+    USB->DEVICE.DeviceEndpoint[ep].EPINTENSET.reg = 
+        ep == 0 ? USB_DEVICE_EPINTENSET_RXSTP 
+                : USB_DEVICE_EPINTENSET_TRCPT0;
+    return DEVICE_OK;
 }
 
 void UsbEndpointOut::startRead()
