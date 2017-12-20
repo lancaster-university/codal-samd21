@@ -349,22 +349,28 @@ int UsbEndpointIn::write(const void *src, int len)
 
     UsbDeviceDescriptor *epdesc = (UsbDeviceDescriptor *)usb_endpoints + ep;
 
+    int epSize = 1 << (epdesc->DeviceDescBank[1].PCKSIZE.bit.SIZE + 3);
+    int zlp = !(flags & USB_EP_FLAG_NO_AUTO_ZLP);
+
     if (wLength)
     {
-        if (len > wLength)
+        if (len >= wLength) {
             len = wLength;
+            // see https://stackoverflow.com/questions/3739901/when-do-usb-hosts-require-a-zero-length-in-packet-at-the-end-of-a-control-read-t
+            zlp = 0;
+        }
         wLength = 0;
     }
 
     /* Check for requirement for multi-packet or auto zlp */
-    if (len >= (1 << (epdesc->DeviceDescBank[1].PCKSIZE.bit.SIZE + 3)))
+    if (len >= epSize)
     {
         /* Update the EP data address */
         data_address = (uint32_t)src;
         // data must be in RAM!
         usb_assert(data_address >= HMCRAMC0_ADDR);
 
-        epdesc->DeviceDescBank[1].PCKSIZE.bit.AUTO_ZLP = !(flags & USB_EP_FLAG_NO_AUTO_ZLP);
+        epdesc->DeviceDescBank[1].PCKSIZE.bit.AUTO_ZLP = zlp;
     }
     else
     {
