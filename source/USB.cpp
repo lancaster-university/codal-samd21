@@ -362,15 +362,11 @@ int UsbEndpointIn::write(const void *src, int len)
         wLength = 0;
     }
 
-    /* Check for requirement for multi-packet or auto zlp */
-    if (len >= epSize)
+    if (len > epSize)
     {
-        /* Update the EP data address */
         data_address = (uint32_t)src;
         // data must be in RAM!
         usb_assert(data_address >= HMCRAMC0_ADDR);
-
-        epdesc->DeviceDescBank[1].PCKSIZE.bit.AUTO_ZLP = zlp;
     }
     else
     {
@@ -380,6 +376,8 @@ int UsbEndpointIn::write(const void *src, int len)
     }
 
     epdesc->DeviceDescBank[1].ADDR.reg = data_address;
+
+sendZLP:
     epdesc->DeviceDescBank[1].PCKSIZE.bit.BYTE_COUNT = len;
     epdesc->DeviceDescBank[1].PCKSIZE.bit.MULTI_PACKET_SIZE = 0;
     /* Clear the transfer complete flag  */
@@ -390,6 +388,13 @@ int UsbEndpointIn::write(const void *src, int len)
     /* Wait for transfer to complete */
     while (!(USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg & USB_DEVICE_EPINTFLAG_TRCPT1))
     {
+    }
+
+    // It seems AUTO_ZLP has issues with 64 byte control endpoints.
+    // We just send ZLP manually if needed.
+    if (zlp && len && (len & (epSize - 1)) == 0) {
+        len = 0;
+        goto sendZLP;
     }
 
     return DEVICE_OK;
