@@ -172,11 +172,59 @@ void usb_set_address(uint16_t wValue)
     USB->DEVICE.DADD.reg = USB_DEVICE_DADD_ADDEN | wValue;
 }
 
+int UsbEndpointIn::clearStall()
+{
+    DMESG("clear stall IN %d", ep);
+	if (USB->DEVICE.DeviceEndpoint[ep].EPSTATUS.reg & USB_DEVICE_EPSTATUSSET_STALLRQ1) {
+        // Remove stall request
+        USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_STALLRQ1;
+        if (USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg & USB_DEVICE_EPINTFLAG_STALL1) {
+            USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_STALL1;
+            // The Stall has occurred, then reset data toggle
+            USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_DTGLIN;
+        }
+    }
+    wLength = 0;
+    return DEVICE_OK;
+}
+
+int UsbEndpointIn::reset()
+{
+    DMESG("reset IN %d", ep);
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_BK1RDY;
+    USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1;
+    wLength = 0;
+    return DEVICE_OK;
+}
+
 int UsbEndpointIn::stall()
 {
     DMESG("stall IN %d", ep);
     USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_STALLRQ1;
     wLength = 0;
+    return DEVICE_OK;
+}
+
+int UsbEndpointOut::clearStall()
+{
+    DMESG("clear stall OUT %d", ep);
+	if (USB->DEVICE.DeviceEndpoint[ep].EPSTATUS.reg & USB_DEVICE_EPSTATUSSET_STALLRQ0) {
+        // Remove stall request
+        USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSCLR_STALLRQ0;
+        if (USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg & USB_DEVICE_EPINTFLAG_STALL0) {
+            USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_STALL0;
+            // The Stall has occurred, then reset data toggle
+            USB->DEVICE.DeviceEndpoint[ep].EPSTATUSCLR.reg = USB_DEVICE_EPSTATUSSET_DTGLOUT;
+        }
+    }
+    return DEVICE_OK;
+}
+
+int UsbEndpointOut::reset()
+{
+    DMESG("reset OUT %d", ep);
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_BK0RDY;
+    USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT0;
     return DEVICE_OK;
 }
 
@@ -231,12 +279,24 @@ UsbEndpointOut::UsbEndpointOut(uint8_t idx, uint8_t type, uint8_t size)
     // dep->EPINTENSET.reg = USB_DEVICE_EPINTENSET_TRCPT0 | USB_DEVICE_EPINTENSET_TRFAIL0 |
     //                      USB_DEVICE_EPINTENSET_STALL0 | USB_DEVICE_EPINTENSET_RXSTP;
     dep->EPINTENCLR.reg = USB_DEVICE_EPINTFLAG_MASK;
-    if (idx == 0)
-        dep->EPINTENSET.reg = USB_DEVICE_EPINTENSET_RXSTP;
-    else
-        dep->EPINTENSET.reg = USB_DEVICE_EPINTENSET_TRCPT0;
-
+    enableIRQ();
     startRead();
+}
+
+int UsbEndpointOut::disableIRQ()
+{
+    USB->DEVICE.DeviceEndpoint[ep].EPINTENCLR.reg = 
+        ep == 0 ? USB_DEVICE_EPINTENCLR_RXSTP 
+                : USB_DEVICE_EPINTENCLR_TRCPT0;
+    return DEVICE_OK;
+}
+
+int UsbEndpointOut::enableIRQ()
+{
+    USB->DEVICE.DeviceEndpoint[ep].EPINTENSET.reg = 
+        ep == 0 ? USB_DEVICE_EPINTENSET_RXSTP 
+                : USB_DEVICE_EPINTENSET_TRCPT0;
+    return DEVICE_OK;
 }
 
 void UsbEndpointOut::startRead()
@@ -280,40 +340,8 @@ int UsbEndpointOut::read(void *dst, int maxlen)
     return packetSize;
 }
 
-int UsbEndpointIn::write(const void *src, int len)
+static void writeEP(UsbDeviceDescriptor *epdesc, uint8_t ep, int len)
 {
-    uint32_t data_address;
-
-    // this happens when someone tries to write before USB is initialized
-    usb_assert(this != NULL);
-
-    UsbDeviceDescriptor *epdesc = (UsbDeviceDescriptor *)usb_endpoints + ep;
-
-    if (wLength)
-    {
-        if (len > wLength)
-            len = wLength;
-        wLength = 0;
-    }
-
-    /* Check for requirement for multi-packet or auto zlp */
-    if (len >= (1 << (epdesc->DeviceDescBank[1].PCKSIZE.bit.SIZE + 3)))
-    {
-        /* Update the EP data address */
-        data_address = (uint32_t)src;
-        // data must be in RAM!
-        usb_assert(data_address >= HMCRAMC0_ADDR);
-
-        epdesc->DeviceDescBank[1].PCKSIZE.bit.AUTO_ZLP = !(flags & USB_EP_FLAG_NO_AUTO_ZLP);
-    }
-    else
-    {
-        /* Copy to local buffer */
-        memcpy(buf, src, len);
-        data_address = (uint32_t)buf;
-    }
-
-    epdesc->DeviceDescBank[1].ADDR.reg = data_address;
     epdesc->DeviceDescBank[1].PCKSIZE.bit.BYTE_COUNT = len;
     epdesc->DeviceDescBank[1].PCKSIZE.bit.MULTI_PACKET_SIZE = 0;
     /* Clear the transfer complete flag  */
@@ -324,6 +352,52 @@ int UsbEndpointIn::write(const void *src, int len)
     /* Wait for transfer to complete */
     while (!(USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg & USB_DEVICE_EPINTFLAG_TRCPT1))
     {
+    }
+}
+
+int UsbEndpointIn::write(const void *src, int len)
+{
+    uint32_t data_address;
+
+    // this happens when someone tries to write before USB is initialized
+    usb_assert(this != NULL);
+
+    UsbDeviceDescriptor *epdesc = (UsbDeviceDescriptor *)usb_endpoints + ep;
+
+    int epSize = 1 << (epdesc->DeviceDescBank[1].PCKSIZE.bit.SIZE + 3);
+    int zlp = !(flags & USB_EP_FLAG_NO_AUTO_ZLP);
+
+    if (wLength)
+    {
+        if (len >= wLength) {
+            len = wLength;
+            // see https://stackoverflow.com/questions/3739901/when-do-usb-hosts-require-a-zero-length-in-packet-at-the-end-of-a-control-read-t
+            zlp = 0;
+        }
+        wLength = 0;
+    }
+
+    if (len > epSize)
+    {
+        data_address = (uint32_t)src;
+        // data must be in RAM!
+        usb_assert(data_address >= HMCRAMC0_ADDR);
+    }
+    else
+    {
+        /* Copy to local buffer */
+        memcpy(buf, src, len);
+        data_address = (uint32_t)buf;
+    }
+
+    epdesc->DeviceDescBank[1].ADDR.reg = data_address;
+
+    writeEP(epdesc, ep, len);
+
+    // It seems AUTO_ZLP has issues with 64 byte control endpoints.
+    // We just send ZLP manually if needed.
+    if (zlp && len && (len & (epSize - 1)) == 0) {
+        writeEP(epdesc, ep, 0);
     }
 
     return DEVICE_OK;
