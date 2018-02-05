@@ -340,6 +340,21 @@ int UsbEndpointOut::read(void *dst, int maxlen)
     return packetSize;
 }
 
+static void writeEP(UsbDeviceDescriptor *epdesc, uint8_t ep, int len)
+{
+    epdesc->DeviceDescBank[1].PCKSIZE.bit.BYTE_COUNT = len;
+    epdesc->DeviceDescBank[1].PCKSIZE.bit.MULTI_PACKET_SIZE = 0;
+    /* Clear the transfer complete flag  */
+    USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1;
+    /* Set the bank as ready */
+    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_BK1RDY;
+
+    /* Wait for transfer to complete */
+    while (!(USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg & USB_DEVICE_EPINTFLAG_TRCPT1))
+    {
+    }
+}
+
 int UsbEndpointIn::write(const void *src, int len)
 {
     uint32_t data_address;
@@ -377,24 +392,12 @@ int UsbEndpointIn::write(const void *src, int len)
 
     epdesc->DeviceDescBank[1].ADDR.reg = data_address;
 
-sendZLP:
-    epdesc->DeviceDescBank[1].PCKSIZE.bit.BYTE_COUNT = len;
-    epdesc->DeviceDescBank[1].PCKSIZE.bit.MULTI_PACKET_SIZE = 0;
-    /* Clear the transfer complete flag  */
-    USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg = USB_DEVICE_EPINTFLAG_TRCPT1;
-    /* Set the bank as ready */
-    USB->DEVICE.DeviceEndpoint[ep].EPSTATUSSET.reg = USB_DEVICE_EPSTATUSSET_BK1RDY;
-
-    /* Wait for transfer to complete */
-    while (!(USB->DEVICE.DeviceEndpoint[ep].EPINTFLAG.reg & USB_DEVICE_EPINTFLAG_TRCPT1))
-    {
-    }
+    writeEP(epdesc, ep, len);
 
     // It seems AUTO_ZLP has issues with 64 byte control endpoints.
     // We just send ZLP manually if needed.
     if (zlp && len && (len & (epSize - 1)) == 0) {
-        len = 0;
-        goto sendZLP;
+        writeEP(epdesc, ep, 0);
     }
 
     return DEVICE_OK;
