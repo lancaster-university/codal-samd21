@@ -30,6 +30,8 @@ DEALINGS IN THE SOFTWARE.
 #ifndef SAMD21PDM_H
 #define SAMD21PDM_H
 
+#define SAMD21_PDM_DECIMATION    64
+
 //
 // RAW buffer size for PDM data from a MEMS microphone, in bytes.
 // n.b. this is required to be word aligned (multiple of 4 bytes),
@@ -71,6 +73,7 @@ private:
     uint32_t        overSamplingErrorPeriod;                // The remainder of the PDM samples used to generate PCM samples per buffer.
     uint32_t        pdmCount;                               // The number of pdmSampled used so far in the generation of a PCM sample.
 
+#if 0
     int             s2_sum1;                                // CIC filter parameters.
     int             s2_sum2;
     int             s2_comb1_1;
@@ -80,6 +83,9 @@ private:
     int             avg;
     int             sum;
     int             samples;
+#endif
+    uint16_t        runningSum;                             //SINC filter parameters
+    uint16_t        *sincPtr;
 
     int             dmaChannel;                             // The DMA channel used by this component
     SAMD21DMAC      &dmac;                                  // The DMA controller used by this component
