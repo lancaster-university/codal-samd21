@@ -60,7 +60,7 @@ private:
     int             invalid;                                // Detemrines if this component has received sufficient data to provide valid output.
 	ManagedBuffer   buffer;                                 // A reference counted stream buffer used to hold PCM sample data.
     uint32_t        outputBufferSize;                       // The size of our output buffer.
-	uint32_t        sampleRate;                             // The PCM output target sample rate (in bps).
+	  uint32_t        sampleRate;                             // The PCM output target sample rate (in bps).
     int16_t         *out;                                   // Write pointer into the output PCM buffer;
 
     uint8_t         rawPDM1[SAMD21_PDM_BUFFER_SIZE];        // A statically alloctaed buffer into which PDM data is transferred via DMA.
@@ -68,22 +68,8 @@ private:
     uint8_t *       pdmDataBuffer;                          // pointer to the PDM buffer that's ready for processing
     uint8_t *       pdmReceiveBuffer;                       // pointer ot the PDM buffer that's ready for receving data from the PDM hardware.
 
-	uint32_t        clockRate;                              // The bit rate at which PDM data is received (in bps).
-    uint32_t        overSamplingRate;                       // The number of PDM samples needed to generate one PCM sample (rounded down).
-    uint32_t        overSamplingErrorPeriod;                // The remainder of the PDM samples used to generate PCM samples per buffer.
-    uint32_t        pdmCount;                               // The number of pdmSampled used so far in the generation of a PCM sample.
+	   uint32_t        clockRate;                              // The bit rate at which PDM data is received (in bps).                            // The number of pdmSampled used so far in the generation of a PCM sample.
 
-#if 0
-    int             s2_sum1;                                // CIC filter parameters.
-    int             s2_sum2;
-    int             s2_comb1_1;
-    int             s2_comb1_2;
-    int             s2_comb2_1;
-    int             s2_comb2_2;
-    int             avg;
-    int             sum;
-    int             samples;
-#endif
     int32_t        runningSum;                             //SINC filter parameters
     uint16_t        *sincPtr;
 

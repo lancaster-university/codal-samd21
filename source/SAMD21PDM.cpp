@@ -73,7 +73,6 @@ SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clo
     this->clockRate = clockRate;
     this->sampleRate = sampleRate;
     this->enabled = false;
-    this->pdmCount = 0;
     this->outputBufferSize = 512;
 
     this->pdmDataBuffer = NULL;
@@ -163,12 +162,6 @@ SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clo
     // Record our actual clockRate, as it's useful for calculating sample window sizes etc.
     clockRate = cs;
 
-    // pre-calculate the rates at which RAW samples will be converted int PCM (to speed up IRQ processing).
-    this->overSamplingRate = clockRate / sampleRate;
-    this->pdmCount = overSamplingRate >> 3;
-    this->overSamplingErrorPeriod = SAMD21_PDM_BUFFER_SIZE / ((clockRate % sampleRate) / SAMD21_PDM_BUFFER_SIZE);
-    this->sampleRate = clockRate / overSamplingRate;
-
     // Disable I2S module while we configure it...
     I2S->CTRLA.reg = 0x00;
 
@@ -238,8 +231,6 @@ void SAMD21PDM::decimate(Event)
 {
     uint32_t *b = (uint32_t *)pdmDataBuffer;
 
-    //__BKPT();
-
     // Ensure we have a sane buffer
     if (pdmDataBuffer == NULL)
         return;
@@ -268,7 +259,7 @@ void SAMD21PDM::decimate(Event)
         // If our output buffer is full, schedule it to flow downstream.
         if (out == (int16_t *) (&buffer[0] + outputBufferSize))
         {
-            __BKPT();
+            //__BKPT();
             if (invalid)
             {
                 invalid--;
