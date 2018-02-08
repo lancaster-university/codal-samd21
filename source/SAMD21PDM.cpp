@@ -100,8 +100,8 @@ SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clo
     GCLK->CLKCTRL.bit.CLKEN = 0;
     while(GCLK->CLKCTRL.bit.CLKEN);
 
-    // We run off the 8MHz clock, and clock divide in the I2S peripheral (to avoid using another clock generator)
-    GCLK->CLKCTRL.bit.GEN = 0x01;   // 8MHz clock source
+    // We run off the 48MHz clock, and clock divide in the I2S peripheral (to avoid using another clock generator)
+    GCLK->CLKCTRL.bit.GEN = 0x00;   // 48MHz clock source
     GCLK->CLKCTRL.bit.CLKEN = 1;    // Enable clock
 
     // Configure a DMA channel
@@ -146,18 +146,18 @@ SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clo
 
     // Configure for DMA enabled, single channel PDM input.
     int clockDivisor = 1;
-    int cs = 8000000;
+    int cs = 48000000;
     while(cs >= clockRate && clockDivisor < 0x1f)
     {
         clockDivisor++;
-        cs = 8000000 / clockDivisor;
+        cs = 48000000 / clockDivisor;
     }
 
     // We want to run at least as fast as the requested speed, so scale up if needed.
     if (cs <= clockRate)
     {
         clockDivisor--;
-        cs = 8000000 / clockDivisor;
+        cs = 48000000 / clockDivisor;
     }
 
     // Record our actual clockRate, as it's useful for calculating sample window sizes etc.
@@ -188,8 +188,8 @@ SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clo
     clkctrl |= I2S_CLKCTRL_MCKOUTDIV(0);
     clkctrl |= I2S_CLKCTRL_MCKDIV(0);
     clkctrl |= I2S_CLKCTRL_NBSLOTS(1);  // STEREO is '1' (subtract one from #)
-    clkctrl |= I2S_CLKCTRL_FSWIDTH(0);  // Frame Sync (FS) Pulse is 1 Slot width
-    clkctrl |= I2S_CLKCTRL_SLOTSIZE(1);
+    clkctrl |= I2S_CLKCTRL_FSWIDTH_SLOT;  // Frame Sync (FS) Pulse is 1 Slot width
+    clkctrl |= I2S_CLKCTRL_SLOTSIZE_16;
 
     // Configure for a 32 bit wide receive, with a SCK clock generated from GCLK_I2S_0.
     I2S->CLKCTRL[0].reg = clkctrl | ((clockDivisor-1) << 19);
@@ -211,8 +211,8 @@ SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clo
       // I2S_SERCTRL_WORDADJ  |  // Data NOT left in word
       I2S_SERCTRL_SLOTADJ     |  // Data is left in slot
       // I2S_SERCTRL_TXSAME   |  // Pad 0 on underrun
-      I2S_SERCTRL_SERMODE(2) |
-      I2S_SERCTRL_DATASIZE(0) |
+      I2S_SERCTRL_SERMODE_PDM2 |
+      I2S_SERCTRL_DATASIZE_32 |
       I2S_SERCTRL_TXDEFAULT(0) |
       I2S_SERCTRL_EXTEND(0);
 
@@ -233,29 +233,26 @@ ManagedBuffer SAMD21PDM::pull()
 	return buffer;
 }
 
-/**
- * A garden variety CIC filter.
- * Based on a very well optimised and documented implementation from here:
- * https://curiouser.cheshireeng.com/2015/01/16/pdm-in-a-tiny-cpu/
- */
+
 void SAMD21PDM::decimate(Event)
 {
-    uint16_t *b = (uint16_t *)pdmDataBuffer;
+    uint32_t *b = (uint32_t *)pdmDataBuffer;
+
+    //__BKPT();
 
     // Ensure we have a sane buffer
     if (pdmDataBuffer == NULL)
         return;
 
-    for (int i=0; i < SAMD21_PDM_BUFFER_SIZE/4; i+=(SAMD21_PDM_DECIMATION/16))
-    {
+    while(b !=  (uint32_t *)((uint8_t *)pdmDataBuffer + SAMD21_PDM_BUFFER_SIZE)){
         runningSum = 0;
         sincPtr = sincfilter;
 
         for (uint8_t samplenum=0; samplenum < (SAMD21_PDM_DECIMATION/16) ; samplenum++) {
-            uint16_t sample = *b++; // we read 16 bits at a time, by default the low half
+             uint16_t sample = *b++ & 0xFFFF;    // we read 16 bits at a time, by default the low half
 
-            ADAPDM_REPEAT_LOOP_16(      // manually unroll loop: for (int8_t b=0; b<16; b++) 
-            {
+             ADAPDM_REPEAT_LOOP_16(      // manually unroll loop: for (int8_t b=0; b<16; b++) 
+               {
                  // start at the LSB which is the 'first' bit to come down the line, chronologically 
                  // (Note we had to set I2S_SERCTRL_BITREV to get this to work, but saves us time!)
                  if (sample & 0x1) {
@@ -263,63 +260,27 @@ void SAMD21PDM::decimate(Event)
                  }
                  sincPtr++;
                  sample >>= 1;
-            }
+              }
             )
         }
-        *out++ = runningSum;
+        *out++ = runningSum - (1<<15);
 
-#if 0
-        // Now feed the 4 bit result to a second CIC with N=2, R=16, M=2
-        // which has bit growth of 10, for a total of 14 significant bits
-        // out. The counter scount is used to implement the decimation.
-        s2_sum1 += pdmDecode[*b++];
-        s2_sum2 += s2_sum1;
-
-        if (--pdmCount == 0)
+        // If our output buffer is full, schedule it to flow downstream.
+        if (out == (int16_t *) (&buffer[0] + outputBufferSize))
         {
-            int tmp1;
-            int v = s2_sum2;
-
-            tmp1 = v - s2_comb1_2;
-            s2_comb1_2 = s2_comb1_1;
-            s2_comb1_1 = v;
-            v = tmp1 - s2_comb2_2;
-            s2_comb2_2 = s2_comb2_1;
-            s2_comb2_1 = tmp1;
-
-            pdmCount = overSamplingRate >> 3;
-
-            // Record a normalised 13 bit PCM sample.
-            sum += v;
-            samples++;
-            *out = (v - avg);
-            out++;
-#endif
-
-            // If our output buffer is full, schedule it to flow downstream.
-            if (out == (int16_t *) (&buffer[0] + outputBufferSize))
+            __BKPT();
+            if (invalid)
             {
-                if (invalid)
-                {
-                    invalid--;
-                }
-                else
-                {
-                    output.pullRequest();
-                    buffer = ManagedBuffer(outputBufferSize);
-                }
-
-                out = (int16_t *) &buffer[0];
-
-#if 0
-                avg = sum / samples;
-                sum = 0;
-                samples = 0;
-#endif
+                invalid--;
             }
-#if 0
+            else
+            {
+                output.pullRequest();
+                buffer = ManagedBuffer(outputBufferSize);
+            }
+
+            out = (int16_t *) &buffer[0];
         }
-#endif
     }
 
     // Record that we've completed processing.

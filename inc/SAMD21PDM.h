@@ -84,7 +84,7 @@ private:
     int             sum;
     int             samples;
 #endif
-    uint16_t        runningSum;                             //SINC filter parameters
+    int32_t        runningSum;                             //SINC filter parameters
     uint16_t        *sincPtr;
 
     int             dmaChannel;                             // The DMA channel used by this component
