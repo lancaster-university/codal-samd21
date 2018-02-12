@@ -259,7 +259,6 @@ void SAMD21PDM::decimate(Event)
         // If our output buffer is full, schedule it to flow downstream.
         if (out == (int16_t *) (&buffer[0] + outputBufferSize))
         {
-            //__BKPT();
             if (invalid)
             {
                 invalid--;
