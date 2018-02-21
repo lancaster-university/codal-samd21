@@ -87,10 +87,9 @@ public:
       * @param sck The pin the PDM clock is conected to.
       * @param dma The DMA controller to use for data transfer.
       * @param sampleRate the rate at which samples are generated in the output buffer (in Hz)
-      * @param clockRate the rate at which this PDM source generates samples. (in Hz, valid values int he range 1MHz...8MHz)
       * @param id The id to use for the message bus when transmitting events.
       */
-    SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clockRate=22000*16, uint16_t id = DEVICE_ID_SYSTEM_MICROPHONE);
+    SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate=22000, uint16_t id = DEVICE_ID_SYSTEM_MICROPHONE);
 
 	/**
 	 * Provide the next available ManagedBuffer to our downstream caller, if available.

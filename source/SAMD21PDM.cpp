@@ -64,14 +64,13 @@ void SAMD21PDM::connect(DataSink& component)
  * @param sck The pin the PDM clock is conected to.
  * @param dma The DMA controller to use for data transfer.
  * @param sampleRate the rate at which samples are generated in the output buffer (in Hz)
- * @param clockRate the rate at which raw PDM data is extracted from the input source (in Hz)
  * @param id The id to use for the message bus when transmitting events.
  */
-SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clockRate, uint16_t id) : dmac(dma), output(*this)
+SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, uint16_t id) : dmac(dma), output(*this)
 {
     this->id = id;
-    this->clockRate = clockRate;
     this->sampleRate = sampleRate;
+    this->clockRate = sampleRate*16;
     this->enabled = false;
     this->outputBufferSize = 512;
 
@@ -145,22 +144,22 @@ SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clo
 
     // Configure for DMA enabled, single channel PDM input.
     int clockDivisor = 1;
-    int cs = 48000000;
-    while(cs >= clockRate && clockDivisor < 0x1f)
+    uint32_t cs = 48000000;
+    while(cs >= this->clockRate && clockDivisor < 0x1f)
     {
         clockDivisor++;
         cs = 48000000 / clockDivisor;
     }
 
     // We want to run at least as fast as the requested speed, so scale up if needed.
-    if (cs <= clockRate)
+    if (cs <= this->clockRate)
     {
         clockDivisor--;
         cs = 48000000 / clockDivisor;
     }
 
     // Record our actual clockRate, as it's useful for calculating sample window sizes etc.
-    clockRate = cs;
+    this->clockRate = cs;
 
     // Disable I2S module while we configure it...
     I2S->CTRLA.reg = 0x00;
