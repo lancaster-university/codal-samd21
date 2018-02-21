@@ -71,7 +71,7 @@ private:
 	   uint32_t        clockRate;                              // The bit rate at which PDM data is received (in bps).                            // The number of pdmSampled used so far in the generation of a PCM sample.
 
     int32_t        runningSum;                             //SINC filter parameters
-    uint16_t        *sincPtr;
+    const uint16_t        *sincPtr;
 
     int             dmaChannel;                             // The DMA channel used by this component
     SAMD21DMAC      &dmac;                                  // The DMA controller used by this component
@@ -90,7 +90,7 @@ public:
       * @param clockRate the rate at which this PDM source generates samples. (in Hz, valid values int he range 1MHz...8MHz)
       * @param id The id to use for the message bus when transmitting events.
       */
-    SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clockRate=1000000, uint16_t id = DEVICE_ID_SYSTEM_MICROPHONE);
+    SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, int clockRate=22000*16, uint16_t id = DEVICE_ID_SYSTEM_MICROPHONE);
 
 	/**
 	 * Provide the next available ManagedBuffer to our downstream caller, if available.
