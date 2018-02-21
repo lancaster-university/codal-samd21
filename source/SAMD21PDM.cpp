@@ -161,6 +161,9 @@ SAMD21PDM::SAMD21PDM(Pin &sd, Pin &sck, SAMD21DMAC &dma, int sampleRate, uint16_
     // Record our actual clockRate, as it's useful for calculating sample window sizes etc.
     this->clockRate = cs;
 
+    // Make sure if we change the clock rate we update the sample rate as well
+    this->sampleRate = clockRate/16;
+
     // Disable I2S module while we configure it...
     I2S->CTRLA.reg = 0x00;
 
