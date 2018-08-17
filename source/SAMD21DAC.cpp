@@ -198,6 +198,12 @@ int SAMD21DAC::pull()
 
     if (dmaChannel == DEVICE_NO_RESOURCES)
         return DEVICE_NO_RESOURCES;
+    
+    if (output.length() == 0) {
+        dataReady = 0;
+        active = false;
+        return DEVICE_OK;
+    }
 
     active = true;
 
